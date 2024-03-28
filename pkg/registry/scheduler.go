@@ -16,6 +16,7 @@ limitations under the License.
 package registry
 
 import (
+	"fmt"
 	"math/rand"
 
 	"github.com/kawabatas/toy-k8s/pkg/api"
@@ -74,6 +75,40 @@ func MakeFirstFitScheduler(machines []string, registry TaskRegistry) Scheduler {
 }
 
 func (s *FirstFitScheduler) Schedule(task api.Task) (string, error) {
-	// TODO
-	return "", nil
+	machineToTasks := map[string][]api.Task{}
+	tasks, err := s.registry.ListTasks(nil)
+	if err != nil {
+		return "", err
+	}
+	for _, scheduledTask := range tasks {
+		host := scheduledTask.CurrentState.Host
+		machineToTasks[host] = append(machineToTasks[host], scheduledTask)
+	}
+	for _, machine := range s.machines {
+		taskFits := true
+		for _, scheduledTask := range machineToTasks[machine] {
+			for _, container := range task.DesiredState.Manifest.Containers {
+				for _, port := range container.Ports {
+					if s.containsPort(scheduledTask, port) {
+						taskFits = false
+					}
+				}
+			}
+		}
+		if taskFits {
+			return machine, nil
+		}
+	}
+	return "", fmt.Errorf("failed to find fit for %#v", task)
+}
+
+func (s *FirstFitScheduler) containsPort(task api.Task, port api.Port) bool {
+	for _, container := range task.DesiredState.Manifest.Containers {
+		for _, taskPort := range container.Ports {
+			if taskPort.HostPort == port.HostPort {
+				return true
+			}
+		}
+	}
+	return false
 }

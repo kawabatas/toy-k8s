@@ -16,8 +16,10 @@ limitations under the License.
 package registry
 
 import (
+	"encoding/json"
 	"net/url"
 
+	"github.com/kawabatas/toy-k8s/pkg/api"
 	"github.com/kawabatas/toy-k8s/pkg/apiserver"
 )
 
@@ -33,31 +35,34 @@ func MakeControllerRegistryStorage(registry ControllerRegistry) apiserver.RESTSt
 }
 
 func (storage *ControllerRegistryStorage) List(*url.URL) (interface{}, error) {
-	// TODO
-	return nil, nil
+	var result api.ReplicationControllerList
+	controllers, err := storage.registry.ListControllers()
+	if err == nil {
+		result = api.ReplicationControllerList{
+			Items: controllers,
+		}
+	}
+	return result, err
 }
 
 func (storage *ControllerRegistryStorage) Get(id string) (interface{}, error) {
-	// TODO
-	return nil, nil
+	return storage.registry.GetController(id)
 }
 
 func (storage *ControllerRegistryStorage) Delete(id string) error {
-	// TODO
-	return nil
+	return storage.registry.DeleteController(id)
 }
 
 func (storage *ControllerRegistryStorage) Extract(body string) (interface{}, error) {
-	// TODO
-	return nil, nil
+	result := api.ReplicationController{}
+	err := json.Unmarshal([]byte(body), &result)
+	return result, err
 }
 
 func (storage *ControllerRegistryStorage) Create(controller interface{}) error {
-	// TODO
-	return nil
+	return storage.registry.CreateController(controller.(api.ReplicationController))
 }
 
 func (storage *ControllerRegistryStorage) Update(controller interface{}) error {
-	// TODO
-	return nil
+	return storage.registry.UpdateController(controller.(api.ReplicationController))
 }

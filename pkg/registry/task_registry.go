@@ -16,6 +16,8 @@ limitations under the License.
 package registry
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/url"
 
 	"github.com/kawabatas/toy-k8s/pkg/api"
@@ -62,31 +64,56 @@ func LabelsMatch(task api.Task, labelQuery *map[string]string) bool {
 }
 
 func (storage *TaskRegistryStorage) List(url *url.URL) (interface{}, error) {
-	// TODO
-	return nil, nil
+	var result api.TaskList
+	var query *map[string]string
+	if url != nil {
+		queryMap := client.DecodeLabelQuery(url.Query().Get("labels"))
+		query = &queryMap
+	}
+	tasks, err := storage.registry.ListTasks(query)
+	if err == nil {
+		result = api.TaskList{
+			Items: tasks,
+		}
+	}
+	return result, err
 }
 
 func (storage *TaskRegistryStorage) Get(id string) (interface{}, error) {
-	// TODO
-	return nil, nil
+	task, err := storage.registry.GetTask(id)
+	if err != nil {
+		return task, err
+	}
+	info, err := storage.containerInfo.GetContainerInfo(task.CurrentState.Host, id)
+	if err != nil {
+		return task, err
+	}
+	task.CurrentState.Info = info
+	return task, err
 }
 
 func (storage *TaskRegistryStorage) Delete(id string) error {
-	// TODO
-	return nil
+	return storage.registry.DeleteTask(id)
 }
 
 func (storage *TaskRegistryStorage) Extract(body string) (interface{}, error) {
-	// TODO
-	return nil, nil
+	task := api.Task{}
+	err := json.Unmarshal([]byte(body), &task)
+	return task, err
 }
 
 func (storage *TaskRegistryStorage) Create(task interface{}) error {
-	// TODO
-	return nil
+	taskObj := task.(api.Task)
+	if len(taskObj.ID) == 0 {
+		return fmt.Errorf("ID is unspecified: %#v", task)
+	}
+	machine, err := storage.scheduler.Schedule(taskObj)
+	if err != nil {
+		return err
+	}
+	return storage.registry.CreateTask(machine, taskObj)
 }
 
 func (storage *TaskRegistryStorage) Update(task interface{}) error {
-	// TODO
-	return nil
+	return storage.registry.UpdateTask(task.(api.Task))
 }

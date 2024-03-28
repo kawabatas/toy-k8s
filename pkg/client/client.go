@@ -23,7 +23,15 @@ limitations under the License.
 package client
 
 import (
+	"bytes"
+	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/kawabatas/toy-k8s/pkg/api"
 )
@@ -58,55 +66,151 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// Underlying base implementation of performing a request.
+// method is the HTTP method (e.g. "GET")
+// path is the path on the host to hit
+// requestBody is the body of the request. Can be nil.
+// target the interface to marshal the JSON response into.  Can be nil.
+func (client Client) rawRequest(method, path string, requestBody io.Reader, target interface{}) ([]byte, error) {
+	request, err := http.NewRequest(method, client.makeURL(path), requestBody)
+	if err != nil {
+		return []byte{}, err
+	}
+	if client.Auth != nil {
+		request.SetBasicAuth(client.Auth.User, client.Auth.Password)
+	}
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	var httpClient *http.Client
+	if client.httpClient != nil {
+		httpClient = client.httpClient
+	} else {
+		httpClient = &http.Client{Transport: tr}
+	}
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != 200 {
+		return nil, fmt.Errorf("request [%s %s] failed (%d) %s", method, client.makeURL(path), response.StatusCode, response.Status)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return body, err
+	}
+	if target != nil {
+		err = json.Unmarshal(body, target)
+	}
+	if err != nil {
+		log.Printf("Failed to parse: %s\n", string(body))
+		// FIXME: no need to return err here?
+	}
+	return body, err
+}
+
+func (client Client) makeURL(path string) string {
+	return client.Host + "/api/v1beta1/" + path
+}
+
+func EncodeLabelQuery(labelQuery map[string]string) string {
+	query := make([]string, 0, len(labelQuery))
+	for key, value := range labelQuery {
+		query = append(query, key+"="+value)
+	}
+	return url.QueryEscape(strings.Join(query, ","))
+}
+
+func DecodeLabelQuery(labelQuery string) map[string]string {
+	result := map[string]string{}
+	if len(labelQuery) == 0 {
+		return result
+	}
+	parts := strings.Split(labelQuery, ",")
+	for _, part := range parts {
+		pieces := strings.Split(part, "=")
+		if len(pieces) == 2 {
+			result[pieces[0]] = pieces[1]
+		} else {
+			log.Printf("Invalid label query: %s", labelQuery)
+		}
+	}
+	return result
+}
+
 // ListTasks takes a label query, and returns the list of tasks that match that query
 func (client Client) ListTasks(labelQuery map[string]string) (api.TaskList, error) {
-	// TODO
-	return api.TaskList{}, nil
+	path := "tasks"
+	if len(labelQuery) > 0 {
+		path += "?labels=" + EncodeLabelQuery(labelQuery)
+	}
+	var result api.TaskList
+	_, err := client.rawRequest("GET", path, nil, &result)
+	return result, err
 }
 
 // GetTask takes the name of the task, and returns the corresponding Task object, and an error if it occurs
 func (client Client) GetTask(name string) (api.Task, error) {
-	// TODO
-	return api.Task{}, nil
+	var result api.Task
+	_, err := client.rawRequest("GET", "tasks/"+name, nil, &result)
+	return result, err
 }
 
 // DeleteTask takes the name of the task, and returns an error if one occurs
 func (client Client) DeleteTask(name string) error {
-	// TODO
-	return nil
+	_, err := client.rawRequest("DELETE", "tasks/"+name, nil, nil)
+	return err
 }
 
 // CreateTask takes the representation of a task.  Returns the server's representation of the task, and an error, if it occurs
 func (client Client) CreateTask(task api.Task) (api.Task, error) {
-	// TODO
-	return api.Task{}, nil
+	var result api.Task
+	body, err := json.Marshal(task)
+	if err == nil {
+		_, err = client.rawRequest("POST", "tasks", bytes.NewBuffer(body), &result)
+	}
+	return result, err
 }
 
 // UpdateTask takes the representation of a task to update.  Returns the server's representation of the task, and an error, if it occurs
 func (client Client) UpdateTask(task api.Task) (api.Task, error) {
-	// TODO
-	return api.Task{}, nil
+	var result api.Task
+	body, err := json.Marshal(task)
+	if err == nil {
+		_, err = client.rawRequest("PUT", "tasks/"+task.ID, bytes.NewBuffer(body), &result)
+	}
+	return result, err
 }
 
 // GetReplicationController returns information about a particular replication controller
 func (client Client) GetReplicationController(name string) (api.ReplicationController, error) {
-	// TODO
-	return api.ReplicationController{}, nil
+	var result api.ReplicationController
+	_, err := client.rawRequest("GET", "replicationControllers/"+name, nil, &result)
+	return result, err
 }
 
 // CreateReplicationController creates a new replication controller
 func (client Client) CreateReplicationController(controller api.ReplicationController) (api.ReplicationController, error) {
-	// TODO
-	return api.ReplicationController{}, nil
+	var result api.ReplicationController
+	body, err := json.Marshal(controller)
+	if err == nil {
+		_, err = client.rawRequest("POST", "replicationControllers", bytes.NewBuffer(body), &result)
+	}
+	return result, err
 }
 
 // UpdateReplicationController updates an existing replication controller
 func (client Client) UpdateReplicationController(controller api.ReplicationController) (api.ReplicationController, error) {
-	// TODO
-	return api.ReplicationController{}, nil
+	var result api.ReplicationController
+	body, err := json.Marshal(controller)
+	if err == nil {
+		_, err = client.rawRequest("PUT", "replicationControllers/"+controller.ID, bytes.NewBuffer(body), &result)
+	}
+	return result, err
 }
 
 func (client Client) DeleteReplicationController(name string) error {
-	// TODO
-	return nil
+	_, err := client.rawRequest("DELETE", "replicationControllers/"+name, nil, nil)
+	return err
 }
