@@ -18,6 +18,7 @@ package registry
 import (
 	"net/url"
 
+	"github.com/kawabatas/toy-k8s/pkg/api"
 	"github.com/kawabatas/toy-k8s/pkg/apiserver"
 	"github.com/kawabatas/toy-k8s/pkg/client"
 )
@@ -35,6 +36,29 @@ func MakeTaskRegistryStorage(registry TaskRegistry, containerInfo client.Contain
 		containerInfo: containerInfo,
 		scheduler:     scheduler,
 	}
+}
+
+// LabelMatch tests to see if a Task's labels map contains 'key' mapping to 'value'
+func LabelMatch(task api.Task, queryKey, queryValue string) bool {
+	for key, value := range task.Labels {
+		if queryKey == key && queryValue == value {
+			return true
+		}
+	}
+	return false
+}
+
+// LabelMatch tests to see if a Task's labels map contains all key/value pairs in 'labelQuery'
+func LabelsMatch(task api.Task, labelQuery *map[string]string) bool {
+	if labelQuery == nil {
+		return true
+	}
+	for key, value := range *labelQuery {
+		if !LabelMatch(task, key, value) {
+			return false
+		}
+	}
+	return true
 }
 
 func (storage *TaskRegistryStorage) List(url *url.URL) (interface{}, error) {
