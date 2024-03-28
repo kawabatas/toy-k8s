@@ -64,4 +64,4 @@ docker ps
 ```
 
 # References
-- [kubernetes/kubernetes](https://github.com/kubernetes/kubernetes) - 1st commit is [2c4b3a5](https://github.com/kubernetes/kubernetes/commit/2c4b3a5)
+- [kubernetes/kubernetes](https://github.com/kubernetes/kubernetes) - [2c4b3a5](https://github.com/kubernetes/kubernetes/commit/2c4b3a5)
